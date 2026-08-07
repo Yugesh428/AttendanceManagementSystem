@@ -9,6 +9,11 @@ import java.util.UUID;
 
 @Repository
 public interface StudentAccountRepository extends JpaRepository<StudentAccount, UUID> {
+
     Optional<StudentAccount> findByUsername(String username);
+
     boolean existsByUsername(String username);
+
+    /** Used by admin device reset — find account by the linked student's ID */
+    Optional<StudentAccount> findByStudentId(UUID studentId);
 }

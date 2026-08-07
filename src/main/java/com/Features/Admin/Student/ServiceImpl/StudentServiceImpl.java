@@ -8,6 +8,7 @@ import com.Features.Admin.Student.repository.StudentAccountRepository;
 import com.Features.Admin.Student.repository.StudentRepository;
 import com.Features.Admin.Student.service.StudentService;
 import com.Features.Admin.Student.util.StudentPasswordGenerator;
+import com.common.EmailService;
 import com.exception.DuplicateResourceException;
 import com.exception.ExcelImportException;
 import com.exception.ResourceNotFoundException;
@@ -34,6 +35,7 @@ public class StudentServiceImpl implements StudentService {
     private final StudentRepository studentRepository;
     private final StudentAccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     // ── Create ─────────────────────────────────────────────────────────────────
     @Override
@@ -47,13 +49,17 @@ public class StudentServiceImpl implements StudentService {
         Student student = studentRepository.save(buildStudentEntity(dto));
         log.info("[STUDENT] Created id='{}'", student.getId());
 
-        // ── Password generated via StudentPasswordGenerator utility ───────────
-        // File: com/Features/Admin/Student/util/StudentPasswordGenerator.java
         String rawPassword = StudentPasswordGenerator.generate(
                 dto.getFirstName(), dto.getPhone(), student.getId());
 
         createAccount(student, rawPassword);
         log.info("[STUDENT] Account created for email='{}'", student.getEmail());
+
+        // Send credentials email asynchronously
+        String fullName = student.getFirstName()
+                + (student.getLastName() != null ? " " + student.getLastName() : "");
+        emailService.sendStudentCredentials(student.getEmail(), fullName,
+                student.getEmail(), rawPassword);
 
         return mapToDTO(student, rawPassword);
     }
@@ -107,7 +113,6 @@ public class StudentServiceImpl implements StudentService {
         if (!studentRepository.existsById(id)) {
             throw new ResourceNotFoundException("Student", "id", id);
         }
-        // StudentAccount deleted via CascadeType.ALL + orphanRemoval on Student
         studentRepository.deleteById(id);
     }
 
@@ -157,14 +162,17 @@ public class StudentServiceImpl implements StudentService {
             List<StudentDTO> saved = new ArrayList<>();
             for (StudentDTO dto : parsed) {
                 Student student = studentRepository.save(buildStudentEntity(dto));
-
-                // ── Password generated via StudentPasswordGenerator utility ───
-                // File: com/Features/Admin/Student/util/StudentPasswordGenerator.java
                 String rawPassword = StudentPasswordGenerator.generate(
                         dto.getFirstName(), dto.getPhone(), student.getId());
-
                 createAccount(student, rawPassword);
                 saved.add(mapToDTO(student, rawPassword));
+
+                // Send credentials email asynchronously per student
+                String fullName = student.getFirstName()
+                        + (student.getLastName() != null ? " " + student.getLastName() : "");
+                emailService.sendStudentCredentials(student.getEmail(), fullName,
+                        student.getEmail(), rawPassword);
+
                 log.info("[STUDENT] Imported + account created for email='{}'", student.getEmail());
             }
 
@@ -179,7 +187,6 @@ public class StudentServiceImpl implements StudentService {
 
     // ── Private helpers ────────────────────────────────────────────────────────
 
-    /** Persists a BCrypt-hashed StudentAccount tied to the given student. */
     private void createAccount(Student student, String rawPassword) {
         accountRepository.save(StudentAccount.builder()
                 .username(student.getEmail())
@@ -206,11 +213,6 @@ public class StudentServiceImpl implements StudentService {
                 .build();
     }
 
-    /**
-     * rawPassword is non-null only right after account creation.
-     * @JsonInclude(NON_NULL) on StudentDTO ensures it is omitted
-     * from list / get / update responses automatically.
-     */
     private StudentDTO mapToDTO(Student s, String rawPassword) {
         return StudentDTO.builder()
                 .id(s.getId())

@@ -48,6 +48,31 @@ public class StudentAccount {
     @JoinColumn(name = "student_id", nullable = false, unique = true)
     private Student student;
 
+    // ── Device registration (phone-first attendance) ───────────────────────────
+    /**
+     * Unique device fingerprint captured on the student's FIRST login.
+     * Must come from a mobile browser (validated via User-Agent).
+     * Sent as X-Device-Id header on every subsequent request.
+     * Attendance scan is rejected if the incoming deviceId doesn't match this.
+     */
+    @Column(name = "device_id", length = 255)
+    private String deviceId;
+
+    /**
+     * Timestamp of when the phone was first registered.
+     * Null means student has never logged in from phone yet.
+     */
+    @Column(name = "device_registered_at")
+    private LocalDateTime deviceRegisteredAt;
+
+    /**
+     * True once the student has completed their first mobile login.
+     * Laptop login is blocked until this is true.
+     */
+    @Builder.Default
+    @Column(name = "phone_registered", nullable = false)
+    private boolean phoneRegistered = false;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

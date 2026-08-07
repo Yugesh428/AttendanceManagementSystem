@@ -34,11 +34,15 @@ public class SecurityConfig {
                 // ── Public auth endpoints ────────────────────────────────────
                 .requestMatchers(
                     "/api/auth/superadmin/login",
-                    "/api/auth/admin/login"
+                    "/api/auth/admin/login",
+                    "/api/auth/teacher/login",
+                    "/api/auth/student/login"
                 ).permitAll()
                 // ── Role-restricted routes ───────────────────────────────────
                 .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                .requestMatchers("/api/teacher/**").hasRole("TEACHER")
+                .requestMatchers("/api/student/**").hasRole("STUDENT")
                 // ── Everything else needs a valid JWT ────────────────────────
                 .anyRequest().authenticated()
             )

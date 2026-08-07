@@ -1,24 +1,27 @@
 package com.Features.Admin.Section.ServiceImpl;
 
 import com.Features.Admin.Section.DTO.SectionDTO;
-import com.Features.Admin.Section.excel.SectionExcelHelper;
 import com.Features.Admin.Section.Section;
 import com.Features.Admin.Section.Repository.SectionRepository;
 import com.Features.Admin.Section.Service.SectionService;
+import com.Features.Admin.Section.excel.SectionExcelHelper;
 import com.Features.Admin.Semester.Semester;
 import com.Features.Admin.Semester.Repository.SemesterRepository;
-import jakarta.persistence.EntityNotFoundException;
+import com.exception.DuplicateResourceException;
+import com.exception.ResourceNotFoundException;
+import com.exception.ExcelImportException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayInputStream;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -30,36 +33,38 @@ public class SectionServiceImpl implements SectionService {
     // ── CREATE ────────────────────────────────────────────────────────────────
     @Override
     public SectionDTO createSection(SectionDTO dto) {
+        log.info("[SECTION] Creating name='{}' semesterId='{}'", dto.getName(), dto.getSemesterId());
 
-        Semester semester = semesterRepository.findById(dto.getSemesterId())
-                .orElseThrow(() -> new EntityNotFoundException(
-                        "Semester not found with ID: " + dto.getSemesterId()));
+        Semester semester = findSemester(dto.getSemesterId());
 
-        // Duplicate check
         if (sectionRepository.existsByNameAndSemesterId(dto.getName(), dto.getSemesterId())) {
-            throw new RuntimeException("Section already exists in this semester");
+            throw new DuplicateResourceException("Section", "name in semester", dto.getName());
         }
 
-        Section section = Section.builder()
+        Section saved = sectionRepository.save(Section.builder()
                 .name(dto.getName())
                 .description(dto.getDescription())
                 .capacity(dto.getCapacity())
-                .createdAt(LocalDateTime.now())
                 .semester(semester)
-                .build();
+                .build());
 
-        return mapToDTO(sectionRepository.save(section));
+        log.info("[SECTION] Created id='{}'", saved.getId());
+        return mapToDTO(saved);
     }
 
     // ── UPDATE ────────────────────────────────────────────────────────────────
     @Override
     public SectionDTO updateSection(UUID id, SectionDTO dto) {
+        log.info("[SECTION] Updating id='{}'", id);
 
-        Section section = sectionRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Section not found"));
+        Section section = findSection(id);
+        Semester semester = findSemester(dto.getSemesterId());
 
-        Semester semester = semesterRepository.findById(dto.getSemesterId())
-                .orElseThrow(() -> new EntityNotFoundException("Semester not found"));
+        // Duplicate check — allow same name if it belongs to this same section
+        if (!section.getName().equalsIgnoreCase(dto.getName())
+                && sectionRepository.existsByNameAndSemesterId(dto.getName(), dto.getSemesterId())) {
+            throw new DuplicateResourceException("Section", "name in semester", dto.getName());
+        }
 
         section.setName(dto.getName());
         section.setDescription(dto.getDescription());
@@ -71,15 +76,14 @@ public class SectionServiceImpl implements SectionService {
 
     // ── GET BY ID ─────────────────────────────────────────────────────────────
     @Override
+    @Transactional(readOnly = true)
     public SectionDTO getSectionById(UUID id) {
-        Section section = sectionRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Section not found"));
-
-        return mapToDTO(section);
+        return mapToDTO(findSection(id));
     }
 
     // ── GET ALL ───────────────────────────────────────────────────────────────
     @Override
+    @Transactional(readOnly = true)
     public List<SectionDTO> getAllSections() {
         return sectionRepository.findAll()
                 .stream()
@@ -90,15 +94,18 @@ public class SectionServiceImpl implements SectionService {
     // ── DELETE ────────────────────────────────────────────────────────────────
     @Override
     public void deleteSection(UUID id) {
+        log.info("[SECTION] Deleting id='{}'", id);
         if (!sectionRepository.existsById(id)) {
-            throw new EntityNotFoundException("Section not found");
+            throw new ResourceNotFoundException("Section", "id", id);
         }
         sectionRepository.deleteById(id);
     }
 
     // ── GET BY SEMESTER ───────────────────────────────────────────────────────
     @Override
+    @Transactional(readOnly = true)
     public List<SectionDTO> getSectionsBySemesterId(UUID semesterId) {
+        findSemester(semesterId); // 404 guard
         return sectionRepository.findBySemesterId(semesterId)
                 .stream()
                 .map(this::mapToDTO)
@@ -107,9 +114,10 @@ public class SectionServiceImpl implements SectionService {
 
     // ── EXPORT EXCEL ──────────────────────────────────────────────────────────
     @Override
+    @Transactional(readOnly = true)
     public ByteArrayInputStream exportToExcel() {
-        List<SectionDTO> sections = getAllSections();
-        return SectionExcelHelper.exportToExcel(sections);
+        log.info("[SECTION] Exporting all sections to Excel");
+        return SectionExcelHelper.exportToExcel(getAllSections());
     }
 
     // ── TEMPLATE ──────────────────────────────────────────────────────────────
@@ -121,43 +129,55 @@ public class SectionServiceImpl implements SectionService {
     // ── IMPORT EXCEL ──────────────────────────────────────────────────────────
     @Override
     public List<SectionDTO> importFromExcel(MultipartFile file) {
+        log.info("[SECTION] Importing sections from Excel");
 
         List<SectionDTO> dtos = SectionExcelHelper.importFromExcel(file);
 
         return dtos.stream().map(dto -> {
 
-            Semester semester = semesterRepository.findById(dto.getSemesterId())
-                    .orElseThrow(() -> new EntityNotFoundException(
-                            "Semester not found with ID: " + dto.getSemesterId()));
+            Semester semester = findSemester(dto.getSemesterId());
 
-            // Duplicate check
             if (sectionRepository.existsByNameAndSemesterId(dto.getName(), dto.getSemesterId())) {
-                throw new RuntimeException("Duplicate section in row for name: " + dto.getName());
+                throw new ExcelImportException(
+                        "Section '" + dto.getName() + "' already exists in semester '"
+                        + semester.getName() + "'");
             }
 
-            Section section = Section.builder()
+            Section section = sectionRepository.save(Section.builder()
                     .name(dto.getName())
                     .description(dto.getDescription())
                     .capacity(dto.getCapacity())
-                    .createdAt(LocalDateTime.now())
                     .semester(semester)
-                    .build();
+                    .build());
 
-            return mapToDTO(sectionRepository.save(section));
+            log.info("[SECTION] Imported id='{}'", section.getId());
+            return mapToDTO(section);
 
         }).collect(Collectors.toList());
     }
 
+    // ── PRIVATE HELPERS ───────────────────────────────────────────────────────
+
+    private Section findSection(UUID id) {
+        return sectionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Section", "id", id));
+    }
+
+    private Semester findSemester(UUID id) {
+        return semesterRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Semester", "id", id));
+    }
+
     // ── MAPPER ────────────────────────────────────────────────────────────────
-    private SectionDTO mapToDTO(Section section) {
+    private SectionDTO mapToDTO(Section s) {
         return SectionDTO.builder()
-                .id(section.getId())
-                .name(section.getName())
-                .description(section.getDescription())
-                .capacity(section.getCapacity())
-                .semesterId(section.getSemester().getId())
-                .semesterName(section.getSemester().getName())
-                .createdAt(section.getCreatedAt())
+                .id(s.getId())
+                .name(s.getName())
+                .description(s.getDescription())
+                .capacity(s.getCapacity())
+                .semesterId(s.getSemester().getId())
+                .semesterName(s.getSemester().getName())
+                .createdAt(s.getCreatedAt())
                 .build();
     }
 }
