@@ -8,50 +8,41 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 /**
- * Resolves any login email across all four roles:
+ * Resolves any login email across all five roles:
  *   1. SuperAdmin
  *   2. Admin
  *   3. Teacher
  *   4. Student
- *
- * Used by the single DaoAuthenticationProvider so one AuthenticationManager
- * handles all roles without multiple providers.
+ *   5. Module Leader
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class CombinedUserDetailsService implements UserDetailsService {
 
-    private final SuperAdminUserDetailsService superAdminUDS;
-    private final AdminUserDetailsService      adminUDS;
-    private final TeacherUserDetailsService    teacherUDS;
-    private final StudentUserDetailsService    studentUDS;
+    private final SuperAdminUserDetailsService    superAdminUDS;
+    private final AdminUserDetailsService         adminUDS;
+    private final TeacherUserDetailsService       teacherUDS;
+    private final StudentUserDetailsService       studentUDS;
+    private final ModuleLeaderUserDetailsService  moduleLeaderUDS;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
 
-        // 1. Try SuperAdmin
-        try {
-            log.debug("[AUTH] Trying SuperAdmin for '{}'", email);
-            return superAdminUDS.loadUserByUsername(email);
-        } catch (UsernameNotFoundException ignored) {}
+        try { return superAdminUDS.loadUserByUsername(email); }
+        catch (UsernameNotFoundException ignored) {}
 
-        // 2. Try Admin
-        try {
-            log.debug("[AUTH] Trying Admin for '{}'", email);
-            return adminUDS.loadUserByUsername(email);
-        } catch (UsernameNotFoundException ignored) {}
+        try { return adminUDS.loadUserByUsername(email); }
+        catch (UsernameNotFoundException ignored) {}
 
-        // 3. Try Teacher
-        try {
-            log.debug("[AUTH] Trying Teacher for '{}'", email);
-            return teacherUDS.loadUserByUsername(email);
-        } catch (UsernameNotFoundException ignored) {}
+        try { return teacherUDS.loadUserByUsername(email); }
+        catch (UsernameNotFoundException ignored) {}
 
-        // 4. Try Student
-        log.debug("[AUTH] Trying Student for '{}'", email);
-        return studentUDS.loadUserByUsername(email);
-        // If none found → throws UsernameNotFoundException
-        // → Spring Security converts to BadCredentialsException → 401
+        try { return studentUDS.loadUserByUsername(email); }
+        catch (UsernameNotFoundException ignored) {}
+
+        // 5. Try Module Leader
+        log.debug("[AUTH] Trying Module Leader for '{}'", email);
+        return moduleLeaderUDS.loadUserByUsername(email);
     }
 }

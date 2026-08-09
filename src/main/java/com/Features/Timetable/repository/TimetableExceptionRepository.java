@@ -32,6 +32,18 @@ public interface TimetableExceptionRepository extends JpaRepository<TimetableExc
     /** All exceptions on a specific date (admin view) */
     List<TimetableException> findByExceptionDateOrderBySlotStartTime(LocalDate date);
 
-    /** All exceptions for a specific slot */
+    /** All exceptions for a slot */
     List<TimetableException> findBySlotIdOrderByExceptionDate(UUID slotId);
+
+    /** All exceptions for a section within a date range (for student dashboard) */
+    @Query("""
+           SELECT e FROM TimetableException e
+           WHERE e.slot.section.id = :sectionId
+             AND e.exceptionDate BETWEEN :from AND :to
+           ORDER BY e.exceptionDate, e.slot.startTime
+           """)
+    List<TimetableException> findBySectionAndDateRange(
+            @Param("sectionId") UUID sectionId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }

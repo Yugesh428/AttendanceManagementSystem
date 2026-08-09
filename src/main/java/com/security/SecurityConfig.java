@@ -16,6 +16,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
@@ -23,26 +24,31 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final JwtAuthenticationFilter    jwtAuthFilter;
     private final CombinedUserDetailsService combinedUserDetailsService;
+    private final CorsConfigurationSource    corsConfigurationSource;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
+            .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .authorizeHttpRequests(auth -> auth
                 // ── Public auth endpoints ────────────────────────────────────
                 .requestMatchers(
                     "/api/auth/superadmin/login",
                     "/api/auth/admin/login",
                     "/api/auth/teacher/login",
-                    "/api/auth/student/login"
+                    "/api/auth/student/login",
+                    "/api/auth/module-leader/login"
                 ).permitAll()
                 // ── Role-restricted routes ───────────────────────────────────
                 .requestMatchers("/api/superadmin/**").hasRole("SUPER_ADMIN")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/teacher/**").hasRole("TEACHER")
+                .requestMatchers("/api/faculty/**").hasRole("TEACHER")
                 .requestMatchers("/api/student/**").hasRole("STUDENT")
+                .requestMatchers("/api/module-leader/**").hasRole("MODULE_LEADER")
                 // ── Everything else needs a valid JWT ────────────────────────
                 .anyRequest().authenticated()
             )
@@ -58,7 +64,6 @@ public class SecurityConfig {
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
-        // Single provider handles both SuperAdmin and Admin via CombinedUserDetailsService
         provider.setUserDetailsService(combinedUserDetailsService);
         provider.setPasswordEncoder(passwordEncoder());
         return provider;

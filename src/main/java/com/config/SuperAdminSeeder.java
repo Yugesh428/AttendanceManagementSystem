@@ -6,16 +6,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-/**
- * Seeds a default SuperAdmin on application startup if none exists.
- * Credentials are read from application.properties:
- *   app.superadmin.email
- *   app.superadmin.password
- */
 @Component
+@Order(1)
 @RequiredArgsConstructor
 @Slf4j
 public class SuperAdminSeeder implements CommandLineRunner {

@@ -1,62 +1,57 @@
 package com.Features.Admin.faculty.Controller;
 
-
 import com.Features.Admin.faculty.DTO.FacultyDTO;
 import com.Features.Admin.faculty.Service.FacultyService;
+import com.common.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/faculty")
+@RequestMapping("/api/admin/faculties")
 @RequiredArgsConstructor
+@PreAuthorize("hasRole('ADMIN')")
 public class FacultyController {
 
     private final FacultyService facultyService;
 
-    // ── CREATE ────────────────────────────────────────────────────────────────
     @PostMapping
-    public ResponseEntity<FacultyDTO> createFaculty(
+    public ResponseEntity<ApiResponse<FacultyDTO>> createFaculty(
             @Valid @RequestBody FacultyDTO dto) {
-
         FacultyDTO created = facultyService.createFaculty(dto);
-        return new ResponseEntity<>(created, HttpStatus.CREATED);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(201, "Faculty created successfully", created));
     }
 
-    // ── GET ALL ───────────────────────────────────────────────────────────────
     @GetMapping
-    public ResponseEntity<List<FacultyDTO>> getAllFaculty() {
-        return ResponseEntity.ok(facultyService.getAllFaculty());
+    public ResponseEntity<ApiResponse<List<FacultyDTO>>> getAllFaculty() {
+        return ResponseEntity.ok(
+                ApiResponse.success("Faculty retrieved successfully", facultyService.getAllFaculty()));
     }
 
-    // ── GET BY ID ─────────────────────────────────────────────────────────────
     @GetMapping("/{id}")
-    public ResponseEntity<FacultyDTO> getFacultyById(
-            @PathVariable UUID id) {
-
-        return ResponseEntity.ok(facultyService.getFacultyById(id));
+    public ResponseEntity<ApiResponse<FacultyDTO>> getFacultyById(@PathVariable UUID id) {
+        return ResponseEntity.ok(
+                ApiResponse.success("Faculty retrieved successfully", facultyService.getFacultyById(id)));
     }
 
-    // ── UPDATE ────────────────────────────────────────────────────────────────
     @PutMapping("/{id}")
-    public ResponseEntity<FacultyDTO> updateFaculty(
+    public ResponseEntity<ApiResponse<FacultyDTO>> updateFaculty(
             @PathVariable UUID id,
             @Valid @RequestBody FacultyDTO dto) {
-
-        return ResponseEntity.ok(facultyService.updateFaculty(id, dto));
+        return ResponseEntity.ok(
+                ApiResponse.success("Faculty updated successfully", facultyService.updateFaculty(id, dto)));
     }
 
-    // ── DELETE ────────────────────────────────────────────────────────────────
     @DeleteMapping("/{id}")
-    public ResponseEntity<String> deleteFaculty(
-            @PathVariable UUID id) {
-
+    public ResponseEntity<ApiResponse<Void>> deleteFaculty(@PathVariable UUID id) {
         facultyService.deleteFaculty(id);
-        return ResponseEntity.ok("Faculty deleted successfully");
+        return ResponseEntity.ok(ApiResponse.success("Faculty deleted successfully"));
     }
 }

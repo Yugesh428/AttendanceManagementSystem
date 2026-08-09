@@ -33,14 +33,18 @@ public interface TimetableService {
     List<TimetableExceptionDTO> getExceptionsBySlot(UUID slotId);
 
     // ── Resolved dashboard (Teacher) ──────────────────────────────────────────
-    /**
-     * Returns today's resolved schedule for the teacher.
-     * Base slots + exceptions merged — what the teacher actually sees.
-     */
     List<ResolvedSlotDTO> getMyTodaySchedule(String teacherEmail);
+    List<ResolvedSlotDTO> getMyWeekSchedule(String teacherEmail, LocalDate weekStart);
+
+    // ── Resolved dashboard (Student) ──────────────────────────────────────────
+    /**
+     * Returns today's resolved schedule for the student's section.
+     * Looks up the student's active enrollment → section → slots for that section today.
+     */
+    List<ResolvedSlotDTO> getStudentTodaySchedule(String studentEmail);
 
     /**
-     * Returns resolved schedule for teacher for a full week containing the given date.
+     * Returns resolved week schedule for the student's section.
      */
-    List<ResolvedSlotDTO> getMyWeekSchedule(String teacherEmail, LocalDate weekStart);
+    List<ResolvedSlotDTO> getStudentWeekSchedule(String studentEmail, LocalDate weekStart);
 }

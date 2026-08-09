@@ -75,6 +75,33 @@ public class EmailService {
     }
 
     /**
+     * Send module leader login credentials on account creation.
+     */
+    @Async
+    public void sendModuleLeaderCredentials(String toEmail, String fullName,
+                                            String username, String password,
+                                            String subjectName) {
+        String subject = appName + " — Module Leader Account Created";
+        String body = String.format("""
+                Dear %s,
+                
+                You have been registered as the Module Leader for: %s
+                
+                Your login credentials:
+                
+                    Username : %s
+                    Password : %s
+                
+                Log in at your institution's portal to view attendance reports for your subject.
+                
+                IMPORTANT: Change your password after your first login.
+                
+                — %s
+                """, fullName, subjectName, username, password, appName);
+        sendEmail(toEmail, subject, body);
+    }
+
+    /**
      * Send enrollment confirmation to student when they are placed in a semester/section.
      */
     @Async

@@ -4,8 +4,13 @@ import com.Features.Admin.Classroom.model.Classroom;
 import com.Features.Admin.Classroom.repository.ClassroomRepository;
 import com.Features.Admin.Section.Section;
 import com.Features.Admin.Section.Repository.SectionRepository;
+import com.Features.Admin.Student.model.Student;
+import com.Features.Admin.Student.repository.StudentRepository;
 import com.Features.Admin.Subject.Subject;
 import com.Features.Admin.Subject.repository.SubjectRepository;
+import com.Features.Enrollment.model.Enrollment;
+import com.Features.Enrollment.model.EnrollmentStatus;
+import com.Features.Enrollment.repository.EnrollmentRepository;
 import com.Features.Teacher.model.Teacher;
 import com.Features.Teacher.repository.TeacherRepository;
 import com.Features.Timetable.dto.ResolvedSlotDTO;
@@ -50,6 +55,8 @@ public class TimetableServiceImpl implements TimetableService {
     private final SubjectRepository subjectRepository;
     private final ClassroomRepository classroomRepository;
     private final SectionRepository sectionRepository;
+    private final StudentRepository studentRepository;
+    private final EnrollmentRepository enrollmentRepository;
 
     // ════════════════════════════════════════════════════════════════════
     // SLOTS — CRUD
@@ -371,6 +378,7 @@ public class TimetableServiceImpl implements TimetableService {
                     .startTime(slot.getStartTime())
                     .endTime(slot.getEndTime())
                     .classroomName(slot.getClassroom().getName())
+                    .sectionName(slot.getSection().getName())
                     .subjectName(slot.getSubject().getSubjectName())
                     .subjectCode(slot.getSubject().getSubjectCode())
                     .teacherName(slot.getTeacher().getFaculty().getFirstName()
@@ -408,6 +416,7 @@ public class TimetableServiceImpl implements TimetableService {
                 .endTime(ex.getOverrideEndTime() != null
                         ? ex.getOverrideEndTime() : slot.getEndTime())
                 .classroomName(classroomName)
+                .sectionName(slot.getSection().getName())
                 .subjectName(slot.getSubject().getSubjectName())
                 .subjectCode(slot.getSubject().getSubjectCode())
                 .teacherName(teacherName)
@@ -503,5 +512,75 @@ public class TimetableServiceImpl implements TimetableService {
     private Section findSection(UUID id) {
         return sectionRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Section", "id", id));
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // STUDENT SCHEDULE — resolves by section (from active enrollment)
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ResolvedSlotDTO> getStudentTodaySchedule(String studentEmail) {
+        LocalDate today = LocalDate.now();
+        return resolveStudentSchedule(studentEmail, today, today);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ResolvedSlotDTO> getStudentWeekSchedule(String studentEmail, LocalDate weekStart) {
+        LocalDate weekEnd = weekStart.plusDays(5);
+        return resolveStudentSchedule(studentEmail, weekStart, weekEnd);
+    }
+
+    /**
+     * Resolves student schedule by looking up their active enrollment's section,
+     * then finding all timetable slots for that section in the given date range.
+     * Exceptions (cancellations, reschedules) are applied just like the teacher view.
+     */
+    private List<ResolvedSlotDTO> resolveStudentSchedule(String studentEmail,
+                                                          LocalDate from, LocalDate to) {
+        Student student = studentRepository.findByEmail(studentEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Student", "email", studentEmail));
+
+        Enrollment enrollment = enrollmentRepository
+                .findByStudentIdAndStatus(student.getId(), EnrollmentStatus.ACTIVE)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Active Enrollment", "studentEmail", studentEmail));
+
+        UUID sectionId = enrollment.getSection().getId();
+
+        List<TimetableSlot> baseSlots =
+                slotRepository.findActiveSlotsBySectionAndDate(sectionId, from);
+
+        // Load all exceptions for any slot in this section's range
+        Map<String, TimetableException> exceptionMap =
+                exceptionRepository.findBySectionAndDateRange(sectionId, from, to)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                e -> e.getSlot().getId() + "::" + e.getExceptionDate(),
+                                e -> e));
+
+        List<ResolvedSlotDTO> result = new ArrayList<>();
+
+        for (LocalDate date = from; !date.isAfter(to); date = date.plusDays(1)) {
+            DayOfWeek day = DayOfWeek.valueOf(date.getDayOfWeek().name());
+
+            for (TimetableSlot slot : baseSlots) {
+                if (slot.getDayOfWeek() != day) continue;
+                if (date.isBefore(slot.getEffectiveFrom())) continue;
+                if (slot.getEffectiveTo() != null && date.isAfter(slot.getEffectiveTo())) continue;
+
+                String key = slot.getId() + "::" + date;
+                TimetableException ex = exceptionMap.get(key);
+                result.add(resolve(slot, date, ex));
+            }
+        }
+
+        result.sort((a, b) -> {
+            int d = a.getDate().compareTo(b.getDate());
+            return d != 0 ? d : a.getStartTime().compareTo(b.getStartTime());
+        });
+
+        return result;
     }
 }

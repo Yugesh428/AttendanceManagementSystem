@@ -27,6 +27,18 @@ public interface TimetableSlotRepository extends JpaRepository<TimetableSlot, UU
             @Param("teacherId") UUID teacherId,
             @Param("date") LocalDate date);
 
+    /** All slots for a section — used for student dashboard */
+    @Query("""
+           SELECT s FROM TimetableSlot s
+           WHERE s.section.id = :sectionId
+             AND s.effectiveFrom <= :date
+             AND (s.effectiveTo IS NULL OR s.effectiveTo >= :date)
+           ORDER BY s.dayOfWeek, s.startTime
+           """)
+    List<TimetableSlot> findActiveSlotsBySectionAndDate(
+            @Param("sectionId") UUID sectionId,
+            @Param("date") LocalDate date);
+
     /** All slots on a specific day for a teacher */
     @Query("""
            SELECT s FROM TimetableSlot s

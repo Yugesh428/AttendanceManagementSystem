@@ -33,6 +33,7 @@ public class ResolvedSlotDTO {
     private LocalTime startTime;
     private LocalTime endTime;
     private String classroomName;
+    private String sectionName;        // which student section attends this slot
     private String subjectName;
     private String subjectCode;
     private String teacherName;        // may be substitute on exception days
