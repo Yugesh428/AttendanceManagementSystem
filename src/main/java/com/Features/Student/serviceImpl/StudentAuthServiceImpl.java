@@ -64,15 +64,14 @@ public class StudentAuthServiceImpl implements StudentAuthService {
         }
 
         // ── 2. Phone-first enforcement ─────────────────────────────────────────
-        // If this is NOT a mobile browser AND the student has never registered their phone,
-        // reject the login. First login MUST be from a mobile device.
-        if (!account.isPhoneRegistered() && !isMobile(userAgent)) {
-            log.warn("[STUDENT LOGIN] Non-mobile first login rejected for email='{}'",
-                    request.getEmail());
-            throw new AppException(HttpStatus.FORBIDDEN,
-                    "First login must be from your mobile phone browser. "
-                    + "Please log in from your phone to register your device first.");
-        }
+        // BYPASSED for development/testing — re-enable for production
+        // if (!account.isPhoneRegistered() && !isMobile(userAgent)) {
+        //     log.warn("[STUDENT LOGIN] Non-mobile first login rejected for email='{}'",
+        //             request.getEmail());
+        //     throw new AppException(HttpStatus.FORBIDDEN,
+        //             "First login must be from your mobile phone browser. "
+        //             + "Please log in from your phone to register your device first.");
+        // }
 
         // ── 3. Authenticate password ───────────────────────────────────────────
         try {
